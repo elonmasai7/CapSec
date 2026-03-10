@@ -1,0 +1,16 @@
+[project]
+name = "capsec"
+version = "0.1.0"
+description = "CapSec: Pact security analyzer"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+dependencies = [
+  "anthropic>=0.30.0",
+]
+
+[project.scripts]
+capsec = "capsec.cli:main"
+capsec-api = "capsec.api:main"
+capsec-ci = "capsec.ci:main"
