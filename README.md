@@ -2,6 +2,22 @@
 
 CapSec is a lightweight Pact security analyzer. It accepts full Pact modules or snippets and returns a structured JSON report of likely vulnerabilities and unsafe patterns. The current implementation uses heuristic checks designed to simulate the same workflow you will later connect to a real LLM.
 
+## Problem Statement
+
+Smart contract security is a critical challenge in blockchain development. Kadena’s Pact language provides powerful tools such as capabilities, guards, and explicit enforcement checks to secure contracts. However, even small mistakes—like missing authorization checks, weak guards, or improper state updates—can lead to severe vulnerabilities, resulting in financial loss, data corruption, or unintended contract behavior.
+
+Developers currently lack a unified, automated tool that can analyze Pact contracts, detect unsafe patterns, and provide actionable guidance before deployment. Manual audits are time-consuming, error-prone, and often miss subtle logic flaws across modules or multi-step workflows.
+
+There is a need for a lightweight yet comprehensive security assistant that can:
+
+- Automatically scan Pact modules, snippets, or entire folders of contracts
+- Detect unsafe coding patterns, capability misuses, weak guards, and state authorization issues
+- Provide clear, actionable recommendations and example fixes
+- Integrate seamlessly into CLI, web interfaces, or CI/CD pipelines
+- Optionally leverage AI for deeper reasoning and security analysis
+
+CapSec addresses this problem by providing developers with a fast, reliable, and production-ready tool to ensure Pact contracts are secure, compliant, and ready for on-chain deployment.
+
 ## Usage
 
 Analyze a file:
