@@ -19,8 +19,8 @@ class AnthropicBackend:
         self.max_tokens = int(os.environ.get("CAPSEC_LLM_MAX_TOKENS", "1024"))
         self.temperature = float(os.environ.get("CAPSEC_LLM_TEMPERATURE", "0"))
 
-    def analyze(self, pact_code: str) -> Dict:
-        prompt = build_prompt(pact_code)
+    def analyze(self, pact_code: str, deployment_info: Dict | None = None) -> Dict:
+        prompt = build_prompt(pact_code, deployment_info=deployment_info)
         try:
             from anthropic import Anthropic
         except Exception as exc:  # noqa: BLE001

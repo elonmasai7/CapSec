@@ -59,5 +59,8 @@ Requirements:
 """.strip()
 
 
-def build_prompt(pact_code: str) -> str:
-    return f"{CAPSEC_PROMPT}\n\nPact Code:\n{pact_code}\n"
+def build_prompt(pact_code: str, deployment_info: dict | None = None) -> str:
+    deployment_block = ""
+    if deployment_info:
+        deployment_block = f"\nDeployment Info:\n{deployment_info}\n"
+    return f"{CAPSEC_PROMPT}\n{deployment_block}\nPact Code:\n{pact_code}\n"

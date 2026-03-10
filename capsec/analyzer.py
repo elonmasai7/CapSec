@@ -46,6 +46,7 @@ DEFINE_KEYSET_RE = re.compile(r"\(define-keyset\s+'?([^\s\)]+)")
 @dataclass
 class Issue:
     function_name: str
+    module_name: str
     severity: str
     description: str
     recommendation: str
@@ -69,6 +70,7 @@ def _detect_state_change_without_auth(func: PactFunction) -> Issue | None:
     if has_state_change and not has_auth:
         return Issue(
             function_name=func.name,
+            module_name="",
             severity="High",
             description=(
                 "State-changing logic is present without any explicit authorization checks. "
@@ -94,6 +96,7 @@ def _detect_state_change_before_auth(func: PactFunction) -> Issue | None:
     if state_index != -1 and auth_index != -1 and state_index < auth_index:
         return Issue(
             function_name=func.name,
+            module_name="",
             severity="Medium",
             description=(
                 "State updates occur before any authorization checks. If execution fails or guards are bypassed, "
@@ -116,6 +119,7 @@ def _detect_defcap_without_guard(cap: PactCapability) -> Issue | None:
     if not _has_any_token(cap.body, guard_tokens):
         return Issue(
             function_name=cap.name,
+            module_name="",
             severity="High",
             description=(
                 "Capability definition does not enforce any guard or keyset. "
@@ -143,6 +147,7 @@ def _detect_unused_capabilities(module: PactModule) -> List[Issue]:
             issues.append(
                 Issue(
                     function_name=cap.name,
+                    module_name="",
                     severity="Low",
                     description=(
                         "Capability is defined but never used. This may indicate missing authorization checks "
@@ -197,6 +202,7 @@ def _detect_capability_arg_mismatch(module: PactModule) -> List[Issue]:
             issues.append(
                 Issue(
                     function_name=cap_name,
+                    module_name="",
                     severity="Medium",
                     description=(
                         "Capability is invoked with a different number of arguments than its definition. "
@@ -222,6 +228,7 @@ def _detect_undefined_capability_use(module: PactModule) -> List[Issue]:
             issues.append(
                 Issue(
                     function_name=cap_name,
+                    module_name="",
                     severity="High",
                     description=(
                         "Capability is used but not defined in the module. This indicates a broken or bypassable "
@@ -242,6 +249,7 @@ def _detect_hardcoded_keys(module: PactModule) -> Issue | None:
     if KEY_LITERAL_RE.search(module.raw) and "define-keyset" in module.raw:
         return Issue(
             function_name=module.name,
+            module_name=module.name,
             severity="Medium",
             description=(
                 "Hard-coded public keys appear in keyset definitions. This makes rotation and governance changes "
@@ -262,6 +270,7 @@ def _detect_weak_enforce_one(module: PactModule) -> Issue | None:
     if pattern.search(module.raw):
         return Issue(
             function_name=module.name,
+            module_name=module.name,
             severity="Medium",
             description=(
                 "`enforce-one` contains a trivially true branch, which can bypass all other checks."
@@ -315,6 +324,7 @@ def _detect_pact_missing_auth(pact: PactPact) -> Issue | None:
     if "(step" in pact.body and not _has_any_token(pact.body, AUTH_TOKENS):
         return Issue(
             function_name=pact.name,
+            module_name="",
             severity="High",
             description=(
                 "Multi-step pact does not include any authorization checks. Steps may be executed by unauthorized parties."
@@ -342,6 +352,7 @@ def _detect_pact_step_state_without_auth(pact: PactPact) -> List[Issue]:
             issues.append(
                 Issue(
                     function_name=pact.name,
+                    module_name="",
                     severity="High",
                     description=(
                         "A pact step mutates state without authorization checks. Any actor could drive the step "
@@ -368,6 +379,7 @@ def _detect_module_governance(module: PactModule) -> List[Issue]:
         issues.append(
             Issue(
                 function_name=module.name,
+                module_name=module.name,
                 severity="High",
                 description=(
                     "Module governance is missing. This can leave administrative operations unprotected."
@@ -385,6 +397,7 @@ def _detect_module_governance(module: PactModule) -> List[Issue]:
         issues.append(
             Issue(
                 function_name=module.name,
+                module_name=module.name,
                 severity="Critical",
                 description=(
                     "Module governance is set to a boolean, which effectively disables access control."
@@ -403,6 +416,7 @@ def _detect_module_governance(module: PactModule) -> List[Issue]:
         issues.append(
             Issue(
                 function_name=module.name,
+                module_name=module.name,
                 severity="Medium",
                 description=(
                     "Module governance does not map to a defined capability or keyset. Governance checks may fail "
@@ -424,33 +438,60 @@ def analyze_module(module: PactModule) -> List[Issue]:
     for func in module.functions:
         issue = _detect_state_change_without_auth(func)
         if issue:
+            if not issue.module_name:
+                issue.module_name = module.name
             issues.append(issue)
         issue = _detect_state_change_before_auth(func)
         if issue:
+            if not issue.module_name:
+                issue.module_name = module.name
             issues.append(issue)
 
     for cap in module.capabilities:
         issue = _detect_defcap_without_guard(cap)
         if issue:
+            if not issue.module_name:
+                issue.module_name = module.name
             issues.append(issue)
 
-    issues.extend(_detect_unused_capabilities(module))
-    issues.extend(_detect_capability_arg_mismatch(module))
-    issues.extend(_detect_undefined_capability_use(module))
-    issues.extend(_detect_module_governance(module))
+    for issue in _detect_unused_capabilities(module):
+        if not issue.module_name:
+            issue.module_name = module.name
+        issues.append(issue)
+    for issue in _detect_capability_arg_mismatch(module):
+        if not issue.module_name:
+            issue.module_name = module.name
+        issues.append(issue)
+    for issue in _detect_undefined_capability_use(module):
+        if not issue.module_name:
+            issue.module_name = module.name
+        issues.append(issue)
+    for issue in _detect_module_governance(module):
+        if not issue.module_name:
+            issue.module_name = module.name
+        issues.append(issue)
 
     for pact in module.pacts:
         issue = _detect_pact_missing_auth(pact)
         if issue:
+            if not issue.module_name:
+                issue.module_name = module.name
             issues.append(issue)
-        issues.extend(_detect_pact_step_state_without_auth(pact))
+        for step_issue in _detect_pact_step_state_without_auth(pact):
+            if not step_issue.module_name:
+                step_issue.module_name = module.name
+            issues.append(step_issue)
 
     module_issue = _detect_hardcoded_keys(module)
     if module_issue:
+        if not module_issue.module_name:
+            module_issue.module_name = module.name
         issues.append(module_issue)
 
     weak_issue = _detect_weak_enforce_one(module)
     if weak_issue:
+        if not weak_issue.module_name:
+            weak_issue.module_name = module.name
         issues.append(weak_issue)
 
     return issues
@@ -477,6 +518,14 @@ def _summarize(issues: List[Issue]) -> Dict:
     }
 
 
+def _normalize_deployment_info(deployment_info: Dict | None, modules: List[PactModule]) -> Dict:
+    info = deployment_info.copy() if deployment_info else {}
+    info.setdefault("addresses", [])
+    info.setdefault("network", "")
+    info.setdefault("modules", [module.name for module in modules])
+    return info
+
+
 def _severity_rank(severity: str) -> int:
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     return order.get(severity.lower(), 4)
@@ -497,6 +546,7 @@ def _detect_cross_module_table_governance(modules: List[PactModule]) -> List[Iss
             issues.append(
                 Issue(
                     function_name=f"cross-module:{table}",
+                    module_name="cross-module",
                     severity="Medium",
                     description=(
                         "The same table name is defined in multiple modules with different governance settings. "
@@ -525,6 +575,7 @@ def _detect_cross_module_capability_reuse(modules: List[PactModule]) -> List[Iss
             issues.append(
                 Issue(
                     function_name=f"cross-module:{cap_name}",
+                    module_name="cross-module",
                     severity="Low",
                     description=(
                         "Capability name is defined in multiple modules. This can lead to confusion or "
@@ -546,6 +597,7 @@ def _detect_cross_module_capability_reuse(modules: List[PactModule]) -> List[Iss
                     issues.append(
                         Issue(
                             function_name=f"{module.name}:{cap_name}",
+                            module_name=module.name,
                             severity="High",
                             description=(
                                 "A module-qualified capability is referenced, but the referenced module "
@@ -561,6 +613,7 @@ def _detect_cross_module_capability_reuse(modules: List[PactModule]) -> List[Iss
                     issues.append(
                         Issue(
                             function_name=f"{module.name}:{cap_name}",
+                            module_name=module.name,
                             severity="High",
                             description=(
                                 "A module-qualified capability is referenced, but the target module does not "
@@ -576,20 +629,27 @@ def _detect_cross_module_capability_reuse(modules: List[PactModule]) -> List[Iss
     return issues
 
 
-def analyze_pact(code: str, llm_backend: LLMBackend | None = None, mode: str = "heuristic") -> dict:
+def analyze_pact(
+    code: str,
+    llm_backend: LLMBackend | None = None,
+    mode: str = "heuristic",
+    deployment_info: Dict | None = None,
+) -> dict:
     modules = parse_pact_multi(code)
     all_issues: List[Issue] = []
+    deployment_info = _normalize_deployment_info(deployment_info, modules)
 
     for module in modules:
         heuristic_issues = analyze_module(module)
         llm_issues: List[Issue] = []
 
         if llm_backend and mode in {"llm", "hybrid"}:
-            llm_result = llm_backend.analyze(module.raw)
+            llm_result = llm_backend.analyze(module.raw, deployment_info=deployment_info)
             for issue in llm_result.get("issues", []):
                 llm_issues.append(
                     Issue(
                         function_name=issue.get("function_name", "unknown"),
+                        module_name=issue.get("module_name", ""),
                         severity=issue.get("severity", "Medium"),
                         description=issue.get("description", ""),
                         recommendation=issue.get("recommendation", ""),
@@ -618,9 +678,11 @@ def analyze_pact(code: str, llm_backend: LLMBackend | None = None, mode: str = "
 
     return {
         "contract_name": contract_name,
+        "deployment_info": deployment_info,
         "issues": [
             {
                 "function_name": issue.function_name,
+                "module_name": issue.module_name,
                 "severity": issue.severity,
                 "description": issue.description,
                 "recommendation": issue.recommendation,
@@ -632,5 +694,13 @@ def analyze_pact(code: str, llm_backend: LLMBackend | None = None, mode: str = "
     }
 
 
-def analyze_pact_json(code: str, llm_backend: LLMBackend | None = None, mode: str = "heuristic") -> str:
-    return json.dumps(analyze_pact(code, llm_backend=llm_backend, mode=mode), indent=2)
+def analyze_pact_json(
+    code: str,
+    llm_backend: LLMBackend | None = None,
+    mode: str = "heuristic",
+    deployment_info: Dict | None = None,
+) -> str:
+    return json.dumps(
+        analyze_pact(code, llm_backend=llm_backend, mode=mode, deployment_info=deployment_info),
+        indent=2,
+    )

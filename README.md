@@ -38,6 +38,39 @@ Analyze a folder of contracts:
 python -m capsec path/to/contracts/
 ```
 
+Analyze with deployment context:
+
+```bash
+python -m capsec --deployment deployment.json path/to/contracts/
+```
+
+Auto-detect `deployment.yaml` (or `.yml`/`.json`) from the project path:
+
+```bash
+python -m capsec path/to/contracts/
+```
+
+Example `deployment.json`:
+
+```json
+{
+  "addresses": ["k:abc123..."],
+  "network": "mainnet01",
+  "modules": ["coin", "finance"]
+}
+```
+
+Example `deployment.yaml`:
+
+```yaml
+network: mainnet01
+addresses:
+  - k:abc123...
+modules:
+  - coin
+  - finance
+```
+
 Run with an LLM backend (hybrid mode):
 
 ```bash
@@ -59,7 +92,7 @@ Example API request:
 ```bash
 curl -X POST localhost:8080/analyze \\
   -H 'Content-Type: application/json' \\
-  -d '{"path":"path/to/contracts","mode":"heuristic"}'
+  -d '{"path":"path/to/contracts","mode":"heuristic","deployment_info":{"network":"mainnet01"}}'
 ```
 
 Run in CI:
@@ -79,9 +112,15 @@ python -m capsec --format text path/to/contracts/
 ```json
 {
   "contract_name": "snippet",
+  "deployment_info": {
+    "addresses": ["k:abc123..."],
+    "network": "mainnet01",
+    "modules": ["coin"]
+  },
   "issues": [
     {
       "function_name": "transfer",
+      "module_name": "coin",
       "severity": "High",
       "description": "State-changing logic is present without any explicit authorization checks. Attackers may be able to modify critical state without owning the required capability or guard.",
       "recommendation": "Add a capability or guard check (e.g., `with-capability`, `enforce-keyset`, or `enforce-guard`) before performing state updates.",

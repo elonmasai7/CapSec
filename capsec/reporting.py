@@ -39,7 +39,9 @@ def format_human(report: Dict, color: bool = True) -> str:
         severity = issue.get("severity", "Medium")
         title = _color(f"[{severity}]", severity, color)
         fn = issue.get("function_name", "unknown")
-        lines.append(f"{idx}. {title} {fn}")
+        module = issue.get("module_name", "")
+        suffix = f"{module}.{fn}" if module else fn
+        lines.append(f"{idx}. {title} {suffix}")
         lines.append(f"   Risk: {issue.get('description', '')}")
         lines.append(f"   Fix: {issue.get('recommendation', '')}")
         example = issue.get("example_fix")

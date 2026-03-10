@@ -6,6 +6,7 @@ import os
 import sys
 
 from .analyzer import analyze_pact, analyze_pact_json
+from .config import find_deployment_manifest, load_deployment_info
 from .io import combine_sources, load_pact_sources
 from .llm_backend import LLMBackend
 from .reporting import format_human
@@ -49,6 +50,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format: json (default) or text.",
     )
     parser.add_argument(
+        "--deployment",
+        help="Path to a JSON file containing deployment_info (addresses, network, modules).",
+    )
+    parser.add_argument(
         "--no-color",
         action="store_true",
         help="Disable ANSI colors for text output.",
@@ -76,11 +81,25 @@ def main(argv: list[str] | None = None) -> int:
             sys.stderr.write("CAPSEC_LLM_BACKEND is required for llm/hybrid mode.\n")
             return 2
 
+    deployment_info = None
+    deployment_path = args.deployment
+    if deployment_path is None and args.paths and args.paths != ["-"]:
+        deployment_path = find_deployment_manifest(args.paths)
+
+    if deployment_path:
+        try:
+            deployment_info = load_deployment_info(deployment_path)
+        except Exception as exc:  # noqa: BLE001
+            sys.stderr.write(f"Failed to load deployment info: {exc}\n")
+            return 2
+
     if args.format == "text":
-        report = analyze_pact(code, llm_backend=backend, mode=args.mode)
+        report = analyze_pact(code, llm_backend=backend, mode=args.mode, deployment_info=deployment_info)
         sys.stdout.write(format_human(report, color=not args.no_color))
     else:
-        sys.stdout.write(analyze_pact_json(code, llm_backend=backend, mode=args.mode))
+        sys.stdout.write(
+            analyze_pact_json(code, llm_backend=backend, mode=args.mode, deployment_info=deployment_info)
+        )
         sys.stdout.write("\n")
     return 0
 

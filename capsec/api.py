@@ -6,6 +6,7 @@ import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from .analyzer import analyze_pact
+from .config import find_deployment_manifest, load_deployment_info
 from .io import combine_sources, load_pact_sources
 from .llm_backend import LLMBackend
 
@@ -47,6 +48,7 @@ class CapSecHandler(BaseHTTPRequestHandler):
         code = payload.get("code")
         paths = payload.get("paths") or payload.get("path")
         mode = payload.get("mode", "heuristic")
+        deployment_info = payload.get("deployment_info")
 
         if code and paths:
             self._send_json({"error": "Provide either code or paths, not both."}, status=400)
@@ -61,6 +63,14 @@ class CapSecHandler(BaseHTTPRequestHandler):
                 paths = [paths]
             sources = load_pact_sources(paths)
             code = combine_sources(sources)
+            if deployment_info is None and paths:
+                deployment_path = find_deployment_manifest(paths)
+                if deployment_path:
+                    try:
+                        deployment_info = load_deployment_info(deployment_path)
+                    except Exception as exc:  # noqa: BLE001
+                        self._send_json({\"error\": f\"Failed to load deployment info: {exc}\"}, status=400)
+                        return
 
         backend = None
         if mode in {"llm", "hybrid"}:
@@ -73,7 +83,7 @@ class CapSecHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "CAPSEC_LLM_BACKEND is required for llm/hybrid mode."}, status=400)
                 return
 
-        result = analyze_pact(code, llm_backend=backend, mode=mode)
+        result = analyze_pact(code, llm_backend=backend, mode=mode, deployment_info=deployment_info)
         self._send_json(result)
 
 
